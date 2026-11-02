@@ -20,10 +20,15 @@ Linux is the initial supported platform. The extension requires desktop Firefox 
 
 Requirements: Go 1.25+, a C compiler, pkg-config, SQLCipher **4**, and Mozilla NSS development libraries. Node.js is needed for extension unit tests; zip is needed to package the extension.
 
-On Fedora:
+On Fedora, install build dependencies with elevated privileges:
 
 ```sh
 pkexec dnf install golang gcc make pkgconf-pkg-config sqlcipher-devel nss-devel
+```
+
+Then build and install as your normal user, **without `sudo` or `pkexec`**:
+
+```sh
 make check
 make install
 export PATH="$HOME/.local/bin:$PATH"
@@ -34,6 +39,8 @@ export PATH="$HOME/.local/bin:$PATH"
 These are CGO builds dynamically linked against the system SQLCipher and NSS libraries. Keep those libraries updated. Ordinary SQLite is not a substitute for SQLCipher; pq fails closed without SQLCipher 4.
 
 ### Start the daemon
+
+**pq is a systemd user service, not a system-wide service. Run these commands as your normal login user, without `sudo` or `pkexec`.** Using `sudo systemctl --user` changes the user context and may target a different user manager, which will not find your installed `pq.service`.
 
 ```sh
 systemctl --user daemon-reload
@@ -54,6 +61,22 @@ make build
 ```
 
 The foreground daemon handles SIGINT/SIGTERM and drops its unlocked session when it exits. The systemd service also starts locked after a crash/restart.
+
+### Troubleshooting the user service
+
+If you see **`Unit pq.service does not exist`**:
+
+- Remove `sudo` or `pkexec` from the `systemctl --user` command.
+- Check that `~/.config/systemd/user/pq.service` exists. If it is missing, run `make install` as your normal user from this checkout.
+- Run the `daemon-reload` and `enable --now` commands above again, without elevation.
+
+Inspect service discovery, state, and recent logs with:
+
+```sh
+systemctl --user list-unit-files pq.service
+systemctl --user status pq.service
+journalctl --user -u pq.service -n 50 --no-pager
+```
 
 ## CLI
 

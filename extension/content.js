@@ -6,7 +6,9 @@
   function visible(input) {
     const style = getComputedStyle(input);
     const rect = input.getBoundingClientRect();
-    return !input.disabled && !input.readOnly && style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+    return !input.disabled && !input.readOnly && style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 &&
+      input.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
+      rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
   }
 
   function safeForm(form) {

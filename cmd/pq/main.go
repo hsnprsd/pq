@@ -209,7 +209,7 @@ func promptSecret(label string) ([]byte, error) {
 }
 
 func readInput(limit int, trimNewline bool) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(os.Stdin, int64(limit+2)))
+	data, err := io.ReadAll(io.LimitReader(os.Stdin, int64(limit+3)))
 	if err != nil {
 		secure.Wipe(data)
 		return nil, err

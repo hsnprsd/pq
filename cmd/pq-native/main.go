@@ -46,6 +46,7 @@ func run(in io.Reader, out io.Writer, socket string) error {
 			return nil
 		}
 		if err != nil {
+			secure.Wipe(req.Password)
 			return errors.New("invalid native message")
 		}
 		response := protocol.Response{Version: protocol.Version}
@@ -60,6 +61,7 @@ func run(in io.Reader, out io.Writer, socket string) error {
 			}
 		}
 		secure.Wipe(req.Password)
+		response.Version = protocol.Version
 		if err := protocol.Write(out, response, protocol.NativeMaxMessage); err != nil {
 			if !errors.Is(err, protocol.ErrTooLarge) {
 				return err

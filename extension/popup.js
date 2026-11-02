@@ -1,6 +1,7 @@
 /* global browser */
 "use strict";
 const $ = id => document.getElementById(id);
+let expiryTimer;
 
 async function request(message) {
   const response = await browser.runtime.sendMessage(message);
@@ -12,6 +13,8 @@ function showError(error) { $("error").textContent = error.message; $("error").h
 async function refresh() {
   const state = await request({ type: "ui.state" });
   const { status } = state;
+  clearTimeout(expiryTimer);
+  if (!status.locked) expiryTimer = setTimeout(() => refresh().catch(showError), Math.max(1, Date.parse(status.expires_at) - Date.now() + 50));
   $("unlock").hidden = !status.locked || !status.initialized;
   $("lock").hidden = status.locked;
   $("vault").hidden = status.locked || !state.origin;
@@ -36,7 +39,7 @@ async function refresh() {
 async function perform(action) {
   $("error").hidden = true;
   for (const button of document.querySelectorAll("button")) button.disabled = true;
-  try { await action(); await refresh(); } catch (error) { showError(error); }
+  try { await action(); await refresh(); } catch (error) { await refresh().catch(() => {}); showError(error); }
   finally { for (const button of document.querySelectorAll("button")) button.disabled = false; }
 }
 

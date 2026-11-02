@@ -117,6 +117,50 @@ func TestImportAtomicity(t *testing.T) {
 	}
 }
 
+func TestJournalEncryptionAndTampering(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vault.db")
+	v, err := Create(path, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := v.Put(model.Entry{Kind: "secret", Title: "journal-sentinel-title", Text: "journal-sentinel-secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.db.Exec("BEGIN IMMEDIATE"); err != nil {
+		t.Fatal(err)
+	}
+	e.Text = "another-journal-sentinel"
+	if _, err := v.Put(e); err != nil {
+		t.Fatal(err)
+	}
+	journal, err := os.ReadFile(path + "-journal")
+	if err != nil || len(journal) == 0 {
+		t.Fatalf("journal: %v", err)
+	}
+	if bytes.Contains(journal, []byte("journal-sentinel")) {
+		t.Fatal("rollback journal exposed plaintext")
+	}
+	if err := v.db.Exec("ROLLBACK"); err != nil {
+		t.Fatal(err)
+	}
+	v.Close()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data[len(data)-50] ^= 0xff
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if corrupted, err := Open(path, password); err == nil {
+		defer corrupted.Close()
+		if _, err := corrupted.List(); err == nil {
+			t.Fatal("tampered encrypted page was accepted")
+		}
+	}
+}
+
 func TestPermissionsAndExistingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "vault.db")
 	v, err := Create(path, password)

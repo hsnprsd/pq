@@ -21,6 +21,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"unsafe"
 )
 
@@ -49,8 +50,8 @@ func Open(path string, password []byte) (*DB, error) {
 		return nil, errors.New("cannot set database key")
 	}
 	version, err := db.Query("PRAGMA cipher_version")
-	if err != nil || len(version) != 1 || len(version[0]) != 1 || version[0][0] == "" {
-		return nil, errors.New("SQLCipher encryption is unavailable")
+	if err != nil || len(version) != 1 || len(version[0]) != 1 || !strings.HasPrefix(version[0][0], "4.") {
+		return nil, errors.New("SQLCipher 4 encryption is required")
 	}
 	if _, err = db.Query("SELECT count(*) FROM sqlite_master"); err != nil {
 		return nil, errors.New("incorrect master password or damaged vault")

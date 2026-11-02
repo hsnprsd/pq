@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,7 +52,15 @@ func Load(path string) (Settings, error) {
 	if err = secure.Check(path, false); err != nil {
 		return s, err
 	}
-	d := json.NewDecoder(io.LimitReader(f, 4097))
+	data, err := io.ReadAll(io.LimitReader(f, 4097))
+	if err != nil {
+		return s, err
+	}
+	trimmed := bytes.TrimSpace(data)
+	if len(data) > 4096 || len(trimmed) == 0 || trimmed[0] != '{' {
+		return s, errors.New("configuration must be a JSON object of at most 4096 bytes")
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
 	if err = d.Decode(&s); err != nil {
 		return s, errors.New("invalid configuration JSON")

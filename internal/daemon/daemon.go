@@ -36,8 +36,14 @@ func (s *Server) lock() {
 	}
 	s.expires = time.Time{}
 }
+func (s *Server) expired() bool {
+	now := time.Now()
+	// Check both clocks: wall time includes suspend, while monotonic time
+	// prevents a backward wall-clock adjustment from extending the session.
+	return s.vault != nil && (!now.Before(s.expires) || !now.Round(0).Before(s.expires.Round(0)))
+}
 func (s *Server) expire() {
-	if s.vault != nil && !time.Now().Before(s.expires) {
+	if s.expired() {
 		s.lock()
 	}
 }
@@ -147,7 +153,7 @@ func (s *Server) Handle(req protocol.Request) (result protocol.Response) {
 		return failure("invalid", err)
 	}
 	// An operation that ran past expiry must not return any decrypted result.
-	if !time.Now().Before(s.expires) {
+	if s.expired() {
 		s.lock()
 		return failure("locked", errors.New("unlock TTL expired during the operation"))
 	}
@@ -304,6 +310,7 @@ func (s *Server) Run(ctx context.Context) error {
 			}()
 			var req protocol.Request
 			if err := protocol.Read(conn, &req, protocol.MaxMessage); err != nil {
+				secure.Wipe(req.Password)
 				_ = protocol.Write(conn, failure("invalid", errors.New("invalid request")), protocol.MaxMessage)
 				return
 			}

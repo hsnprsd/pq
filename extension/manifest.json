@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Use your local encrypted pq vault to fill and save HTTPS logins.",
   "browser_specific_settings": {
-    "gecko": { "id": "pq@local", "strict_min_version": "115.0", "data_collection_permissions": { "required": ["none"] } }
+    "gecko": { "id": "pq@local", "strict_min_version": "142.0", "data_collection_permissions": { "required": ["none"] } }
   },
   "permissions": ["nativeMessaging", "activeTab", "https://*/*"],
   "background": { "scripts": ["security.js", "background.js"], "persistent": true },

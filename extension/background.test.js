@@ -9,7 +9,7 @@ const PQSecurity = require("./security.js");
 function harness() {
   let listener;
   const calls = [], fills = [];
-  const state = { url: "https://example.com/login", navigateOnGet: false };
+  const state = { url: "https://example.com/login", navigateOnGet: false, locked: false, expireOnList: false };
   const event = { addListener() {} };
   const browser = {
     runtime: {
@@ -18,8 +18,10 @@ function harness() {
       async sendNativeMessage(host, request) {
         assert.equal(host, "pq"); calls.push(structuredClone(request));
         switch (request.op) {
-          case "status": return { status: { locked: false, initialized: true } };
-          case "browser.list": return { entries: [{ id: "entry", title: "Example", username: "alice" }] };
+          case "status": return { status: { locked: state.locked, initialized: true } };
+          case "browser.list":
+            if (state.expireOnList) { state.locked = true; return { error: "Vault expired", code: "locked" }; }
+            return { entries: [{ id: "entry", title: "Example", username: "alice" }] };
           case "browser.get":
             if (state.navigateOnGet) state.url = "https://evil.test";
             return { entry: { username: "alice", password: "stored-secret" } };
@@ -55,6 +57,13 @@ test("filling uses the active tab's origin and only its top frame", async () => 
   assert.equal(h.calls[0].origin, "https://example.com");
   assert.equal(h.fills[0].message.password, "stored-secret");
   assert.equal(h.fills[0].options.frameId, 0);
+});
+
+test("expiry during popup loading returns a locked state rather than stranding the UI", async () => {
+  const h = harness(); h.state.expireOnList = true;
+  const response = await h.send({ type: "ui.state" });
+  assert.equal(response.status.locked, true);
+  assert.equal(response.entries.length, 0);
 });
 
 test("navigation while fetching a credential prevents filling", async () => {

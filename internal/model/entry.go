@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const MaxSecret = 1 << 20
@@ -52,6 +53,11 @@ func Origin(raw string) (string, error) {
 }
 
 func (e *Entry) Validate() error {
+	for _, field := range []string{e.Title, e.Username, e.Password, e.Text, e.Notes} {
+		if !utf8.ValidString(field) {
+			return errors.New("entry fields must be valid UTF-8 text")
+		}
+	}
 	if strings.TrimSpace(e.Title) == "" || len(e.Title) > 512 {
 		return errors.New("title must contain 1–512 bytes")
 	}
@@ -62,7 +68,7 @@ func (e *Entry) Validate() error {
 		return errors.New("too many tags or origins")
 	}
 	for _, tag := range e.Tags {
-		if len(tag) > 128 {
+		if len(tag) > 128 || !utf8.ValidString(tag) {
 			return errors.New("tag exceeds size limit")
 		}
 	}
@@ -81,7 +87,7 @@ func (e *Entry) Validate() error {
 	seen := map[string]bool{}
 	origins := make([]string, 0, len(e.Origins))
 	for _, raw := range e.Origins {
-		if len(raw) > 4096 {
+		if len(raw) > 4096 || !utf8.ValidString(raw) {
 			return errors.New("website URL exceeds size limit")
 		}
 		origin, err := Origin(raw)

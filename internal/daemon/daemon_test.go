@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,6 +67,33 @@ func TestTTLAndBrowserIsolation(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	if response := s.Handle(protocol.Request{Op: "status"}); !response.Status.Locked {
 		t.Fatal("TTL not enforced on status")
+	}
+}
+
+func TestConcurrentRequests(t *testing.T) {
+	s := testServer(t)
+	if response := s.Handle(protocol.Request{Op: "init", Password: master()}); response.Error != "" {
+		t.Fatal(response.Error)
+	}
+	defer s.Handle(protocol.Request{Op: "lock"})
+	expiry := s.expires
+	if response := s.Handle(protocol.Request{Op: "unlock", Password: master(), TTL: "1h"}); response.Error == "" || !s.expires.Equal(expiry) {
+		t.Fatal("unlock extended an existing session")
+	}
+	var workers sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			e := model.Entry{Kind: "secret", Title: "concurrent", Text: "synthetic secret"}
+			if response := s.Handle(protocol.Request{Op: "put", Entry: &e}); response.Error != "" {
+				t.Error(response.Error)
+			}
+		}()
+	}
+	workers.Wait()
+	if response := s.Handle(protocol.Request{Op: "list"}); response.Error != "" || len(response.Entries) != 20 {
+		t.Fatal("concurrent writes lost entries")
 	}
 }
 

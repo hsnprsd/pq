@@ -14,7 +14,7 @@ async function refresh() {
   const state = await request({ type: "ui.state" });
   const { status } = state;
   clearTimeout(expiryTimer);
-  if (!status.locked) expiryTimer = setTimeout(() => refresh().catch(showError), Math.max(1, Date.parse(status.expires_at) - Date.now() + 50));
+  if (!status.locked) expiryTimer = setTimeout(() => refresh().catch(showError), Math.min(2147483647, Math.max(1, Date.parse(status.expires_at) - Date.now() + 50)));
   $("unlock").hidden = !status.locked || !status.initialized;
   $("lock").hidden = status.locked;
   $("vault").hidden = status.locked || !state.origin;

@@ -2,6 +2,13 @@ package model
 
 import "testing"
 
+func TestTextValidation(t *testing.T) {
+	e := Entry{Kind: "secret", Title: "binary", Text: string([]byte{0xff})}
+	if err := e.Validate(); err == nil {
+		t.Fatal("accepted invalid UTF-8 that JSON would silently replace")
+	}
+}
+
 func TestOrigins(t *testing.T) {
 	for raw, want := range map[string]string{"https://Example.COM:443/login": "https://example.com", "http://example.com:80/x": "http://example.com", "https://example.com:8443": "https://example.com:8443", "https://[::1]:443/path": "https://[::1]"} {
 		got, err := Origin(raw)

@@ -15,8 +15,11 @@
     const page = new URL(location.href);
     if (page.protocol !== "https:") throw new Error("HTTPS is required.");
     if (form) {
-      const action = new URL(form.action || page.href, page.href);
-      if (action.origin !== page.origin || action.username || action.password) throw new Error("Cross-origin form actions are not supported.");
+      const actions = [form.action, ...[...form.elements].filter(element => element.hasAttribute("formaction")).map(element => element.formAction)];
+      for (const raw of actions) {
+        const action = new URL(raw || page.href, page.href);
+        if (action.origin !== page.origin || action.username || action.password) throw new Error("Cross-origin form actions are not supported.");
+      }
     }
   }
 

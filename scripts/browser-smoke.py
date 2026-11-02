@@ -89,6 +89,12 @@ def main():
     await invoke({ type: "ui.fill", id: ENTRY_ID });
     let [values] = await browser.tabs.executeScript(tab.id, { code: "[document.querySelector('[name=username]').value, document.querySelector('[name=password]').value]" });
     if (values[0] !== "alice" || values[1] !== "synthetic password") throw new Error("Real form filling failed");
+    await browser.tabs.executeScript(tab.id, { code: "document.querySelector('button').setAttribute('formaction', 'https://evil.test'); document.querySelector('[name=password]').value = ''" });
+    if (!(await pqTestHandler({ type: "ui.fill", id: ENTRY_ID }, sender)).error) throw new Error("Cross-origin submit override was allowed");
+    await browser.tabs.executeScript(tab.id, { code: "document.querySelector('button').removeAttribute('formaction'); document.querySelector('[name=password]').style.opacity = '0'" });
+    if (!(await pqTestHandler({ type: "ui.fill", id: ENTRY_ID }, sender)).error) throw new Error("Hidden password field was filled");
+    await browser.tabs.executeScript(tab.id, { code: "document.querySelector('[name=password]').style.opacity = '1'" });
+    await invoke({ type: "ui.fill", id: ENTRY_ID });
     await browser.tabs.executeScript(tab.id, { code: "document.querySelector('[name=password]').value = 'updated synthetic password'" });
     await invoke({ type: "ui.capture" });
     await invoke({ type: "ui.save" });
@@ -140,7 +146,7 @@ def main():
                         if entry["title"] == "smoke-fail":
                             raise RuntimeError(entry.get("username", "Browser test failed"))
                         if entry["title"] == "smoke-pass":
-                            print("PASS: real Firefox native messaging, HTTPS form fill/save, popup unlock, and origin isolation")
+                            print("PASS: real Firefox native messaging, HTTPS form fill/save, extension unlock, and origin isolation")
                             return
                 raise RuntimeError("Timed out waiting for Firefox")
             except Exception:

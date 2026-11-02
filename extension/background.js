@@ -6,7 +6,7 @@ const candidateTTL = 120000;
 
 async function native(request) {
   const response = await browser.runtime.sendNativeMessage("pq", request);
-  if (response.error) throw new Error(response.error);
+  if (response.error) { const error = new Error(response.error); error.code = response.code; throw error; }
   return response;
 }
 
@@ -70,7 +70,13 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         try { page = await activePage(); } catch (error) { return { status: response.status, pageError: error.message, entries: [] }; }
         const candidate = currentCandidate(page.tab.id, page.origin);
         let entries = [];
-        if (!response.status.locked) entries = (await native({ op: "browser.list", origin: page.origin })).entries || [];
+        if (!response.status.locked) {
+          try { entries = (await native({ op: "browser.list", origin: page.origin })).entries || []; }
+          catch (error) {
+            if (error.code !== "locked") throw error;
+            response.status = (await native({ op: "status" })).status;
+          }
+        }
         return { status: response.status, origin: page.origin, entries, candidate: candidate ? { username: candidate.username } : null };
       }
       case "ui.unlock": {

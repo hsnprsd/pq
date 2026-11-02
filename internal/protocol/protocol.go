@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"time"
+	"unicode/utf8"
 
 	"pq/internal/model"
 	"pq/internal/secure"
@@ -62,6 +63,9 @@ func Read(r io.Reader, value any, limit int) error {
 	defer secure.Wipe(buf)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
+	}
+	if !utf8.Valid(buf) {
+		return errors.New("protocol JSON must be valid UTF-8")
 	}
 	if err := json.Unmarshal(buf, value); err != nil {
 		return errors.New("invalid protocol JSON")

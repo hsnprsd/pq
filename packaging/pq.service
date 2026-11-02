@@ -1,0 +1,16 @@
+[Unit]
+Description=pq encrypted password vault
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/pq daemon
+Restart=on-failure
+RestartSec=2
+UMask=0077
+LimitCORE=0
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=default.target

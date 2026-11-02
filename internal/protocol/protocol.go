@@ -11,10 +11,15 @@ import (
 	"pq/internal/secure"
 )
 
+const Version = 1
+
+var ErrTooLarge = errors.New("message exceeds size limit")
+
 const MaxMessage = 16 << 20
 const NativeMaxMessage = 1 << 20
 
 type Request struct {
+	Version     int           `json:"version,omitempty"`
 	Op          string        `json:"op"`
 	Password    []byte        `json:"password,omitempty"`
 	TTL         string        `json:"ttl,omitempty"`
@@ -35,6 +40,7 @@ type Status struct {
 }
 
 type Response struct {
+	Version int                 `json:"version"`
 	Error   string              `json:"error,omitempty"`
 	Code    string              `json:"code,omitempty"`
 	Status  *Status             `json:"status,omitempty"`
@@ -70,7 +76,7 @@ func Write(w io.Writer, value any, limit int) error {
 	}
 	defer secure.Wipe(buf)
 	if len(buf) > limit {
-		return errors.New("message exceeds size limit")
+		return ErrTooLarge
 	}
 	var header [4]byte
 	binary.LittleEndian.PutUint32(header[:], uint32(len(buf)))

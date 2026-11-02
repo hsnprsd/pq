@@ -52,11 +52,12 @@ func (s *Server) status() *protocol.Status {
 }
 
 func failure(code string, err error) protocol.Response {
-	return protocol.Response{Code: code, Error: err.Error()}
+	return protocol.Response{Version: protocol.Version, Code: code, Error: err.Error()}
 }
 
 // Handle serializes all database operations, including expiry and backups.
-func (s *Server) Handle(req protocol.Request) protocol.Response {
+func (s *Server) Handle(req protocol.Request) (result protocol.Response) {
+	defer func() { result.Version = protocol.Version }()
 	defer secure.Wipe(req.Password)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -206,19 +207,6 @@ func (s *Server) browser(req protocol.Request) (protocol.Response, error) {
 	return response, nil
 }
 
-func sameUser(conn *net.UnixConn) bool {
-	raw, err := conn.SyscallConn()
-	if err != nil {
-		return false
-	}
-	valid := false
-	err = raw.Control(func(fd uintptr) {
-		cred, e := syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
-		valid = e == nil && cred.Uid == uint32(os.Getuid())
-	})
-	return err == nil && valid
-}
-
 func (s *Server) Run(ctx context.Context) error {
 	if _, err := config.Duration(s.Settings.UnlockTTL); err != nil {
 		return err
@@ -289,7 +277,7 @@ func (s *Server) Run(ctx context.Context) error {
 			}
 			return fmt.Errorf("accept: %w", err)
 		}
-		if !sameUser(conn) {
+		if !secure.SameUser(conn) {
 			conn.Close()
 			continue
 		}
@@ -319,8 +307,13 @@ func (s *Server) Run(ctx context.Context) error {
 				_ = protocol.Write(conn, failure("invalid", errors.New("invalid request")), protocol.MaxMessage)
 				return
 			}
+			if req.Version != protocol.Version {
+				secure.Wipe(req.Password)
+				_ = protocol.Write(conn, failure("invalid", errors.New("unsupported protocol version")), protocol.MaxMessage)
+				return
+			}
 			response := s.Handle(req)
-			if err := protocol.Write(conn, response, protocol.MaxMessage); err != nil {
+			if err := protocol.Write(conn, response, protocol.MaxMessage); errors.Is(err, protocol.ErrTooLarge) {
 				_ = protocol.Write(conn, failure("invalid", errors.New("response exceeds size limit")), protocol.MaxMessage)
 			}
 		}()

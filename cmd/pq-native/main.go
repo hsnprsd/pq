@@ -48,7 +48,7 @@ func run(in io.Reader, out io.Writer, socket string) error {
 		if err != nil {
 			return errors.New("invalid native message")
 		}
-		response := protocol.Response{}
+		response := protocol.Response{Version: protocol.Version}
 		if !allowed(req.Op) {
 			response.Error = "operation is not available to the browser"
 			response.Code = "forbidden"
@@ -61,8 +61,10 @@ func run(in io.Reader, out io.Writer, socket string) error {
 		}
 		secure.Wipe(req.Password)
 		if err := protocol.Write(out, response, protocol.NativeMaxMessage); err != nil {
-			// No credentials are included in error responses.
-			if err := protocol.Write(out, protocol.Response{Error: "native response failed or exceeded size limit", Code: "invalid"}, protocol.NativeMaxMessage); err != nil {
+			if !errors.Is(err, protocol.ErrTooLarge) {
+				return err
+			}
+			if err := protocol.Write(out, protocol.Response{Version: protocol.Version, Error: "native response exceeded size limit", Code: "invalid"}, protocol.NativeMaxMessage); err != nil {
 				return err
 			}
 		}

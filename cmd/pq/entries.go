@@ -139,6 +139,7 @@ func putEntry(paths config.Paths, command string, args []string) error {
 		}
 		defer secure.Wipe(data)
 		id, kind := e.ID, e.Kind
+		e = model.Entry{}
 		if err := json.Unmarshal(data, &e); err != nil {
 			return errors.New("invalid entry JSON")
 		}

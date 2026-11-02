@@ -24,8 +24,8 @@ type Vault struct {
 type ImportResult = model.ImportResult
 
 func Create(path string, password []byte) (*Vault, error) {
-	if len(password) < 12 {
-		return nil, errors.New("master password must contain at least 12 bytes")
+	if len(password) < 12 || len(password) > 4096 {
+		return nil, errors.New("master password must contain 12–4096 bytes")
 	}
 	f, err := secure.NewFile(path)
 	if err != nil {

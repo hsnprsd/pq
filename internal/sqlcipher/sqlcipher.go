@@ -144,8 +144,8 @@ func (db *DB) Query(query string, args ...string) ([][]string, error) {
 }
 
 func (db *DB) Rekey(password []byte) error {
-	if len(password) < 12 {
-		return errors.New("new master password must contain at least 12 bytes")
+	if len(password) < 12 || len(password) > 4096 {
+		return errors.New("new master password must contain 12–4096 bytes")
 	}
 	p := C.CBytes(password)
 	defer C.wipe_free(p, C.size_t(len(password)))

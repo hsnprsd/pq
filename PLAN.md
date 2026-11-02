@@ -4,12 +4,14 @@ Build a Linux-first, local password manager in Go. A systemd user daemon owns an
 
 ## Milestones
 
-1. Validate SQLCipher and native-messaging dependencies; establish project structure.
-2. Implement encrypted storage, transactional CRUD/import, password changes, and encrypted backups.
-3. Implement the daemon, secure local protocol, TTL, CLI, and systemd integration.
-4. Implement Firefox CSV and read-only NSS profile imports.
-5. Implement the Firefox extension and native host, with origin-restricted credential access.
-6. Test the complete workflow, harden edge cases, and document installation and security boundaries.
+1. [x] Validate SQLCipher and native-messaging dependencies; establish project structure.
+2. [x] Implement encrypted storage, transactional CRUD/import, password changes, and encrypted backups.
+3. [x] Implement the daemon, secure local protocol, TTL, CLI, and systemd integration.
+4. [x] Implement Firefox CSV and read-only NSS profile imports.
+5. [x] Implement the Firefox extension and native host, with origin-restricted credential access.
+6. [x] Test the complete workflow, harden edge cases, and document installation and security boundaries.
+
+Verification: Go race tests and vet, Node extension tests, web-ext lint, synthetic NSS profile imports, CLI/native-host subprocess tests, and a real headless Firefox HTTPS form fill/save and native-messaging smoke test all pass on Fedora. See [README.md](README.md) for reproducible commands and [SECURITY.md](SECURITY.md) for remaining security/release work. A signed Firefox release and independent security review are not part of this completed implementation milestone.
 
 Commit each working milestone separately. Run automated tests and real CLI smoke tests before considering the implementation complete.
 

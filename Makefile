@@ -1,6 +1,6 @@
 PREFIX ?= $(HOME)/.local
 
-.PHONY: build test check install extension clean
+.PHONY: build test check browser-test lint-extension install extension clean
 
 build:
 	mkdir -p bin
@@ -14,6 +14,12 @@ check: test
 	go vet ./...
 	node --test extension/*.test.js
 
+browser-test: build
+	python3 scripts/browser-smoke.py
+
+lint-extension:
+	npx --yes web-ext lint --source-dir extension --ignore-files '*.test.js'
+
 install: build
 	install -Dm755 bin/pq "$(PREFIX)/bin/pq"
 	install -Dm755 bin/pq-native "$(PREFIX)/bin/pq-native"
@@ -21,7 +27,8 @@ install: build
 	@printf '\nInstalled. The service expects %%h/.local/bin/pq; override ExecStart if PREFIX differs.\n'
 
 extension:
-	cd extension && zip -j ../pq-firefox.xpi manifest.json background.js content.js popup.html popup.js popup.css security.js
+	rm -f pq-firefox.xpi
+	cd extension && zip -j -X ../pq-firefox.xpi manifest.json background.js content.js popup.html popup.js popup.css security.js
 
 clean:
 	rm -rf bin pq-firefox.xpi

@@ -21,11 +21,7 @@ type Vault struct {
 	db   *sqlcipher.DB
 	path string
 }
-type ImportResult struct {
-	Added   int `json:"added"`
-	Updated int `json:"updated"`
-	Skipped int `json:"skipped"`
-}
+type ImportResult = model.ImportResult
 
 func Create(path string, password []byte) (*Vault, error) {
 	if len(password) < 12 {

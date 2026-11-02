@@ -10,6 +10,12 @@ import (
 
 const MaxSecret = 1 << 20
 
+type ImportResult struct {
+	Added   int `json:"added"`
+	Updated int `json:"updated"`
+	Skipped int `json:"skipped"`
+}
+
 type Entry struct {
 	ID        string    `json:"id,omitempty"`
 	Kind      string    `json:"kind"`

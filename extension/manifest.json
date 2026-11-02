@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "pq",
+  "version": "0.1.0",
+  "description": "Use your local encrypted pq vault to fill and save HTTPS logins.",
+  "browser_specific_settings": {
+    "gecko": { "id": "pq@local", "strict_min_version": "115.0" }
+  },
+  "permissions": ["nativeMessaging", "activeTab", "https://*/*"],
+  "background": { "scripts": ["security.js", "background.js"], "persistent": true },
+  "browser_action": { "default_title": "pq", "default_popup": "popup.html" },
+  "content_scripts": [{ "matches": ["https://*/*"], "js": ["content.js"], "all_frames": false, "run_at": "document_idle" }],
+  "content_security_policy": "script-src 'self'; object-src 'none'; connect-src 'none'"
+}

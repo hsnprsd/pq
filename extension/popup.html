@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>pq</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><h1>pq</h1><button id="lock" hidden>Lock</button></header>
+  <p id="status">Connecting to daemon…</p>
+  <p id="error" role="alert" hidden></p>
+  <form id="unlock" hidden>
+    <label>Master password<input id="master" type="password" autocomplete="off" required maxlength="4096"></label>
+    <label>Unlock TTL (optional)<input id="ttl" type="text" placeholder="Daemon default"></label>
+    <button type="submit">Unlock</button>
+  </form>
+  <section id="vault" hidden>
+    <p id="origin"></p>
+    <h2>Matching logins</h2>
+    <div id="entries"></div>
+    <button id="capture">Capture current login form</button>
+    <section id="pending" hidden>
+      <p id="candidate"></p>
+      <p>Saving updates an existing login with the same username, or creates a new login.</p>
+      <button id="save">Confirm save / update</button>
+    </section>
+  </section>
+  <footer>Local vault · HTTPS only · User-triggered filling</footer>
+  <script src="popup.js"></script>
+</body>
+</html>

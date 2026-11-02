@@ -70,6 +70,11 @@ def main():
             "browser.runtime.onMessage.addListener(async (message, sender) => {",
             "browser.runtime.onMessage.addListener(globalThis.pqTestHandler = async (message, sender) => {")
         (source / "background.js").write_text(background)
+        # Only the temporary test copy exposes the chooser and accepts synthetic
+        # clicks. Unit tests separately verify the production trusted-click guard.
+        content = (source / "content.js").read_text().replace('mode: "closed"', 'mode: "open"').replace(
+            "if (!event.isTrusted) return;", "/* Allow synthetic clicks in this test copy only. */")
+        (source / "content.js").write_text(content)
         manifest = json.loads((source / "manifest.json").read_text())
         manifest["background"]["scripts"].append("smoke.js")
         (source / "manifest.json").write_text(json.dumps(manifest))
@@ -85,10 +90,34 @@ def main():
       await new Promise(resolve => setTimeout(resolve, 100));
       if ((await browser.tabs.get(tab.id)).status === "complete") break;
     }
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    await invoke({ type: "ui.fill", id: ENTRY_ID });
-    let [values] = await browser.tabs.executeScript(tab.id, { code: "[document.querySelector('[name=username]').value, document.querySelector('[name=password]').value]" });
-    if (values[0] !== "alice" || values[1] !== "synthetic password") throw new Error("Real form filling failed");
+    const run = async code => (await browser.tabs.executeScript(tab.id, { code }))[0];
+    const pause = () => new Promise(resolve => setTimeout(resolve, 500));
+    const wait = async (code, label) => {
+      for (let i = 0; i < 100; i++) {
+        if (await run(code)) return;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      throw new Error(label);
+    };
+    const fields = `<input name="username" autocomplete="username"><input name="password" type="password" autocomplete="current-password"><button>Sign in</button>`;
+    const reset = async (html = fields) => run(`document.querySelector('form').innerHTML = ${JSON.stringify(html)}`);
+    const filled = "document.querySelector('[name=username]')?.value === 'alice' && document.querySelector('[name=password]')?.value === 'synthetic password'";
+    await wait(filled, "Automatic form prefilling failed");
+    await reset();
+    await wait(filled, "Dynamically inserted form was not prefilled");
+    await reset(fields.replace('name="username"', 'name="username" value="already typed"'));
+    await pause();
+    if (await run("document.querySelector('[name=password]').value !== ''")) throw new Error("Automatic filling overwrote a partially entered login");
+    await invoke({ type: "ui.lock" });
+    await reset(); await pause();
+    if (await run("document.querySelector('[name=password]').value !== ''")) throw new Error("Locked vault was autofilled");
+    await invoke({ type: "ui.unlock", password: MASTER });
+    await wait(filled, "Unlock did not retry automatic filling");
+    await reset(fields.replace('<button>', '<button formaction="https://evil.test">'));
+    await pause();
+    if (await run("document.querySelector('[name=password]').value !== ''")) throw new Error("Automatic filling allowed a cross-origin submit override");
+    await run("document.querySelector('button').removeAttribute('formaction')");
+    await wait(filled, "Safe form-action change did not retry prefilling");
     await browser.tabs.executeScript(tab.id, { code: "document.querySelector('button').setAttribute('formaction', 'https://evil.test'); document.querySelector('[name=password]').value = ''" });
     if (!(await pqTestHandler({ type: "ui.fill", id: ENTRY_ID }, sender)).error) throw new Error("Cross-origin submit override was allowed");
     await browser.tabs.executeScript(tab.id, { code: "document.querySelector('button').removeAttribute('formaction'); document.querySelector('[name=password]').style.opacity = '0'" });
@@ -102,8 +131,20 @@ def main():
     if (saved.entry?.password !== "updated synthetic password") throw new Error("Real form saving failed");
     if (!(await raw({ op: "get", id: ENTRY_ID })).error) throw new Error("Native host allowed generic access");
     if (!(await raw({ op: "browser.get", id: ENTRY_ID, origin: "https://evil.test" })).error) throw new Error("Origin isolation failed");
-    await invoke({ type: "ui.lock" });
-    await invoke({ type: "ui.unlock", password: MASTER });
+    const added = await raw({ op: "browser.save", origin, entry: { title: "Second account", username: "bob", password: "second synthetic password" } });
+    if (added.error) throw new Error(added.error);
+    await reset();
+    await wait("Boolean(document.getElementById('pq-login-chooser')?.shadowRoot)", "Multiple logins did not automatically open the chooser");
+    if (await run("document.querySelector('[name=password]').value !== ''")) throw new Error("An account was filled before selection");
+    const labels = await run("[...document.getElementById('pq-login-chooser').shadowRoot.querySelectorAll('section > button')].map(button => button.textContent)");
+    if (labels.length !== 2 || !labels.some(label => label.startsWith('alice')) || !labels.some(label => label.startsWith('bob'))) throw new Error("Chooser did not list both accounts");
+    await run("[...document.getElementById('pq-login-chooser').shadowRoot.querySelectorAll('section > button')].find(button => button.textContent.startsWith('bob')).click()");
+    await wait("document.querySelector('[name=username]').value === 'bob' && document.querySelector('[name=password]').value === 'second synthetic password' && !document.getElementById('pq-login-chooser')", "Selecting the second account failed");
+    await reset();
+    await wait("Boolean(document.getElementById('pq-login-chooser'))", "Chooser did not reopen for a new form");
+    await run("document.getElementById('pq-login-chooser').shadowRoot.querySelector('header button').click()");
+    await pause();
+    if (await run("Boolean(document.getElementById('pq-login-chooser'))")) throw new Error("Dismissed chooser reopened immediately");
     await raw({ op: "browser.save", origin, entry: { title: "smoke-pass", username: "passed", password: "test-only" } });
   } catch (error) {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -146,7 +187,7 @@ def main():
                         if entry["title"] == "smoke-fail":
                             raise RuntimeError(entry.get("username", "Browser test failed"))
                         if entry["title"] == "smoke-pass":
-                            print("PASS: real Firefox native messaging, HTTPS form fill/save, extension unlock, and origin isolation")
+                            print("PASS: real Firefox automatic prefilling, dynamic forms, account chooser/selection, native messaging, fill/save, unlock, and origin isolation")
                             return
                 raise RuntimeError("Timed out waiting for Firefox")
             except Exception:

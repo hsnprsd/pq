@@ -22,7 +22,7 @@ Commit each working milestone separately. Run automated tests and real CLI smoke
 - Cache an unlocked database connection, not the master password. Close it on lock, expiry, and shutdown.
 - Restrict the Unix socket and vault directory to the current user; validate peer credentials.
 - Use absolute unlock expiry, defaulting to 15 minutes. Browser activity cannot extend it.
-- Use explicit browser filling, exact origin matching, and confirmed save/update operations.
+- Automatically prefill unambiguous empty login forms, enforce exact origin matching, and require confirmed save/update operations.
 - Never expose generic secret entries through the browser API.
 - No cloud sync, sharing, passkeys, or TOTP in this initial implementation.
 

@@ -11,7 +11,7 @@ A local password manager in Go: an encrypted SQLite vault, a user daemon, a CLI,
 - A daemon that starts locked, shares an unlocked session between clients, and locks after a configurable absolute TTL.
 - CLI CRUD, metadata search, transactional Firefox imports, master-password changes, and encrypted backups.
 - Firefox CSV import and direct, read-only NSS import from `logins.json` / `key4.db`, including Primary Password support.
-- Firefox credential selection and filling, login-save suggestions, and confirmed saves/updates through native messaging.
+- Firefox automatic login prefilling, credential selection, login-save suggestions, and confirmed saves/updates through native messaging.
 - No cloud account, remote service, telemetry, or TCP listener.
 
 Linux is the initial supported platform. The extension requires desktop Firefox 142 or later. Firefox integration supplies a third-party password-manager experience; it cannot replace Firefox's internal login-storage backend.
@@ -204,7 +204,7 @@ The manifest intentionally uses Firefox's legacy `~/.mozilla/native-messaging-ho
 2. Choose **Load Temporary Add-on** and select `extension/manifest.json`.
 3. Reload already-open website tabs so the content script is installed.
 4. Click the **pq** toolbar button. Unlock there or with `pq unlock`.
-5. On an HTTPS login page, click a matching credential to fill it. pq never submits the form automatically.
+5. On an HTTPS login page, pq automatically prefills an empty, visible login form when exactly one saved login matches the site's origin. This also works for dynamically displayed forms and retries when you return to the page or unlock through the popup. If several logins match, an on-page chooser opens automatically so you can select an account. You can dismiss it or press Escape inside it; the toolbar popup remains available for manual filling. pq never overwrites entered values during automatic filling or submits the form automatically.
 
 When a form is submitted, a `+` badge indicates a possible login to save. Open the popup and confirm **save / update**. On JavaScript-only forms, use **Capture current login form** first. Suggestions are kept only in extension memory for up to two minutes and are never written to browser storage. Saving updates a unique matching username on that origin; ambiguous matches require CLI editing.
 
@@ -214,7 +214,7 @@ Consider disabling Firefox's own password-save/autofill features to avoid compet
 
 ### Deliberate browser restrictions
 
-- HTTPS only, exact scheme/host/port matching, and explicit user-triggered filling.
+- HTTPS only and exact scheme/host/port matching. Automatic filling requires one matching login and an empty form in the active tab; multiple matches open an account chooser without fetching passwords until you select one.
 - Top-frame forms only; cross-origin form actions, hidden/off-screen fields, and ambiguous registration forms are refused.
 - No generic-secret retrieval through the native host.
 - No password persistence in extension storage and no external network access from extension pages.
@@ -240,7 +240,7 @@ npx --yes web-ext lint --source-dir extension --ignore-files '*.test.js'
 python3 scripts/browser-smoke.py  # Optional real Firefox test, after make build
 ```
 
-The browser test additionally needs Firefox, Python 3, openssl, certutil (`nss-tools` on Fedora), and Node/npm. It may download `web-ext` through npx. It creates a temporary HOME, Firefox profile, test-only certificate authority, HTTPS server, native manifest, and vault, using only synthetic credentials. It does not access your existing vault/profile. A test-only hook invokes the real background handlers; native messaging and DOM filling/saving execute in real Firefox.
+The browser test additionally needs Firefox, Python 3, openssl, certutil (`nss-tools` on Fedora), and Node/npm. It may download `web-ext` through npx. It creates a temporary HOME, Firefox profile, test-only certificate authority, HTTPS server, native manifest, and vault, using only synthetic credentials. It does not access your existing vault/profile. Test-only hooks invoke the real background handlers and allow automation to inspect/click the chooser in a temporary extension copy; unit tests separately verify its closed shadow root and trusted-click requirement. Native messaging and DOM filling/saving execute in real Firefox.
 
 Automated tests cover encrypted database/journal contents, tampering, wrong passwords, transactional imports, backup/restore, rekeying, concurrent-safe IPC, socket permissions, TTL, restart locking, real CLI/native-host round trips, NSS decryption with/without a Primary Password, and extension origin/message boundaries.
 

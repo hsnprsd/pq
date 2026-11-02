@@ -2,6 +2,7 @@
 "use strict";
 
 const pending = new Map();
+const loginChoices = new Map();
 const candidateTTL = 120000;
 
 async function native(request) {
@@ -18,9 +19,28 @@ async function activePage() {
   return { tab, origin };
 }
 
-async function verifyPage(tabId, origin) {
+async function verifyPage(tabId, origin, automatic = false) {
   const tab = await browser.tabs.get(tabId);
-  if (PQSecurity.origin(tab.url) !== origin) throw new Error("The page changed; try again.");
+  if (PQSecurity.origin(tab.url) !== origin || (automatic && !tab.active)) throw new Error("The page changed; try again.");
+}
+
+async function fill(tabId, origin, id, automatic = false) {
+  const response = await native({ op: "browser.get", origin, id });
+  try {
+    await verifyPage(tabId, origin, automatic);
+    const result = await browser.tabs.sendMessage(tabId, {
+      type: "fill", origin, automatic,
+      username: response.entry.username || "", password: response.entry.password || ""
+    }, { frameId: 0 });
+    if (!result || result.error) throw new Error(result?.error || "Could not fill the login.");
+  } finally { if (response.entry) response.entry.password = ""; }
+}
+
+async function requestAutofill() {
+  try {
+    const { tab, origin } = await activePage();
+    await browser.tabs.sendMessage(tab.id, { type: "autofill", origin }, { frameId: 0 });
+  } catch (_) { /* Unlock still succeeds if the current page has no content script. */ }
 }
 
 function forget(tabId) {
@@ -45,9 +65,10 @@ function currentCandidate(tabId, origin) {
   return value;
 }
 
-browser.tabs.onRemoved.addListener(forget);
+browser.tabs.onRemoved.addListener(tabId => { forget(tabId); loginChoices.delete(tabId); });
 browser.tabs.onUpdated.addListener((tabId, change) => {
   if (change.url) {
+    loginChoices.delete(tabId);
     const value = pending.get(tabId);
     if (value && value.origin !== PQSecurity.origin(change.url)) forget(tabId);
   }
@@ -55,11 +76,37 @@ browser.tabs.onUpdated.addListener((tabId, change) => {
 
 browser.runtime.onMessage.addListener(async (message, sender) => {
   try {
-    // Content scripts can suggest a save, never request stored credentials.
+    // Content scripts may signal a login form or select a previously offered
+    // login, but never receive passwords in a response. Use Firefox's origin.
     if (sender.tab) {
       const origin = PQSecurity.senderOrigin(sender);
-      if (message.type !== "candidate" || !origin || !PQSecurity.validCandidate(message)) throw new Error("Untrusted content request.");
-      remember(sender.tab.id, origin, message);
+      if (!origin) throw new Error("Untrusted content request.");
+      if (message.type === "autofill") {
+        await verifyPage(sender.tab.id, origin, true);
+        const entries = (await native({ op: "browser.list", origin })).entries || [];
+        loginChoices.delete(sender.tab.id);
+        if (entries.length === 1) await fill(sender.tab.id, origin, entries[0].id, true);
+        else if (entries.length > 1) {
+          await verifyPage(sender.tab.id, origin, true);
+          loginChoices.set(sender.tab.id, { origin, ids: new Set(entries.map(entry => entry.id)), expires: Date.now() + candidateTTL });
+          const result = await browser.tabs.sendMessage(sender.tab.id, {
+            type: "choose", origin,
+            entries: entries.map(entry => ({ id: entry.id, title: entry.title, username: entry.username }))
+          }, { frameId: 0 });
+          if (!result || result.error) {
+            loginChoices.delete(sender.tab.id);
+            throw new Error(result?.error || "Could not show the login chooser.");
+          }
+        }
+      } else if (message.type === "autofill.select") {
+        const choices = loginChoices.get(sender.tab.id);
+        if (!choices || choices.origin !== origin || choices.expires <= Date.now() || !choices.ids.has(message.id)) throw new Error("The login choices expired. Use the pq toolbar popup or reload the page.");
+        await verifyPage(sender.tab.id, origin, true);
+        loginChoices.delete(sender.tab.id);
+        await fill(sender.tab.id, origin, message.id, true);
+      } else if (message.type === "candidate" && PQSecurity.validCandidate(message)) {
+        remember(sender.tab.id, origin, message);
+      } else throw new Error("Untrusted content request.");
       return { ok: true };
     }
     if (sender.id !== browser.runtime.id || sender.url !== browser.runtime.getURL("popup.html")) throw new Error("Untrusted extension request.");
@@ -88,20 +135,17 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         bytes.fill(0);
         try { await native({ op: "unlock", password: encoded, ttl: message.ttl || "" }); }
         finally { encoded = ""; }
+        await requestAutofill();
         return { ok: true };
       }
       case "ui.lock":
         await native({ op: "lock" });
+        loginChoices.clear();
         for (const tabId of pending.keys()) forget(tabId);
         return { ok: true };
       case "ui.fill": {
         const { tab, origin } = await activePage();
-        const response = await native({ op: "browser.get", origin, id: message.id });
-        try {
-          await verifyPage(tab.id, origin);
-          const result = await browser.tabs.sendMessage(tab.id, { type: "fill", origin, username: response.entry.username || "", password: response.entry.password || "" }, { frameId: 0 });
-          if (!result || result.error) throw new Error(result?.error || "Could not fill the login.");
-        } finally { if (response.entry) response.entry.password = ""; }
+        await fill(tab.id, origin, message.id);
         return { ok: true };
       }
       case "ui.capture": {
